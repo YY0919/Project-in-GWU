@@ -1,2 +1,2 @@
-# Project-in-GWU
-### This file contains project code in GWU
+# Projects in GWU
+### This file contains my project codes in GWU
