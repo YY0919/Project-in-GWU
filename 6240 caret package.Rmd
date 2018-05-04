@@ -1,0 +1,247 @@
+
+```{r}
+library(tensorflow)
+#install_tensorflow("conda")
+
+library(keras)
+#install_keras()
+
+library(MASS)
+library(caret)
+library(gbm)
+```
+### data clean
+
+```{r}
+housingvalue<-Boston
+housingvalue$chas=as.factor(housingvalue$chas)
+housingvalue$rad=as.factor(housingvalue$rad)
+to_one_hot=model.matrix(~rad,housingvalue)
+housingvalue<-cbind(housingvalue,to_one_hot)
+housingvalue<-housingvalue[,-9]
+housingvalue<-housingvalue[,-14]
+```
+### splitting training dataset and testing dataset
+```{r}
+trainIndex <- createDataPartition(housingvalue$medv, p = .8, 
+                                  list = FALSE, 
+                                  times = 1)
+housingvalue_train<-housingvalue[trainIndex,]
+housingvalue_test<-housingvalue[-trainIndex,]
+```
+
+
+#question6
+### find best reasonable parameter of batch_size and drop out
+```{r}
+caret_control <- caret::trainControl(method = "repeatedcv",
+                              number = 10,
+                              repeats = 2)
+
+caret_grid <- expand.grid(batch_size=seq(60,120,20),
+                          dropout=seq(0.3,0.8,0.1),
+                          size=100,
+                          lr=2e-6,
+                          rho=.9,
+                          decay=0,
+                          activation = "relu")
+batchsize_dropout <- train(medv ~ ., data = housingvalue_train, 
+                 method = "mlpKerasDropout", 
+                 trControl = caret_control, 
+                 tuneGrid = caret_grid,
+                 verbose = FALSE)
+batchsize_dropout
+```
+```{r}
+trellis.par.set(caretTheme())
+plot(batchsize_dropout)  
+```
+
+### find best reasonable parameter of size(number of nodes in hidden layer) and learning_rate
+
+```{r}
+caret_control <- caret::trainControl(method = "repeatedcv",
+                              number = 10,
+                              repeats = 2)
+
+caret_grid <- expand.grid(batch_size=80,
+                          dropout=0.7,
+                          size=seq(60,120,20),
+                          lr=c(2e-6,2e-5,2e-4,2e-3,2e-2,2e-1),
+                          rho=.9,
+                          decay=0,
+                          activation = "relu")
+units_lr <- train(medv ~ ., data = housingvalue_train, 
+                 method = "mlpKerasDropout", 
+                 trControl = caret_control, 
+                 tuneGrid = caret_grid,
+                 verbose = FALSE)
+units_lr
+```
+
+```{r}
+trellis.par.set(caretTheme())
+plot(units_lr)  
+```
+
+### find best reasonable parameter of activation method
+```{r}
+caret_control <- caret::trainControl(method = "repeatedcv",
+                              number = 10,
+                              repeats = 2)
+
+caret_grid <- expand.grid(batch_size=80,
+                          dropout=0.5,
+                          size=80,
+                          lr=0.02,
+                          rho=.9,
+                          decay=0,
+                          activation = c("relu", "sigmoid" ,"tanh"))
+                          
+find_activation <- train(medv ~ ., data = housingvalue_train, 
+                 method = "mlpKerasDropout", 
+                 trControl = caret_control, 
+                 tuneGrid = caret_grid,
+                 verbose = FALSE)
+find_activation
+```
+```{r}
+trellis.par.set(caretTheme())
+plot(find_activation)  
+```
+
+### best NN model 
+##By caret,  the reasonale values used for the model were size = 80, dropout = 0.5, batch_size =60, lr = 0.02, rho = 0.9, decay = 0 and activation = tanh.
+```{r}
+train_data<-as.matrix(housingvalue_train[,-13])
+train_label<-as.matrix(housingvalue_train[,13])
+train_data <- array_reshape(train_data, c(nrow(train_data), ncol(train_data)))
+#train_label<-to_categorical(train_label)
+```
+
+```{r}
+model.1 <- keras_model_sequential() 
+model.1 %>% 
+  layer_dense(units = 80, activation = "relu", input_shape = c(ncol(train_data))) %>%
+  layer_dropout(rate=0.5) %>% 
+ layer_dense(units = 1)
+
+model.1 %>% compile(
+  loss = 'mse',
+  optimizer = optimizer_rmsprop(lr=0.02),
+  metrics = c('mae')
+)
+
+history <-model.1 %>% fit(train_data, train_label, epochs = 100, batch_size = 60, validation_split = 0.1) 
+plot(history)
+```
+
+
+
+### keras prediction
+```{r}
+test_data<-as.matrix(housingvalue_test[,-13])
+test_label<-as.matrix(housingvalue_test[,13])
+test_data <- array_reshape(test_data, c(nrow(test_data), ncol(test_data)))
+
+keras_prediction<-(model.1 %>% predict(test_data))
+model.1 %>% evaluate(test_data, test_label)
+postResample(keras_prediction, housingvalue_test$medv)
+```
+```{r}
+names(Boston)
+```
+
+```{r}
+par(mfrow=c(1,2))
+#for (i in 1:13){
+#  plot(Boston$medv,Boston[,i])
+#}
+Boston_test<-Boston[-trainIndex,]
+for (i in names(Boston_test)){
+  plot(keras_prediction, Boston_test[,i])
+  title(main = i)
+}
+```
+### By observing the scatter plots of variables, variables rm and Istat seem have non-linear effect on medv.
+
+##determine the importance of variabeles by linear regression
+```{r}
+linearegress=lm(medv~., data = Boston)
+summary(linearegress)
+```
+### By linear regression, indus and age have non-important effect on medv.
+
+#question7 gbm
+## find reasonable parameters--interaction.depth and n.tree
+```{r}
+fitControl <- trainControl(## 10-fold CV
+                           method = "repeatedcv",
+                           number = 10,
+                           ## repeated ten times
+                           repeats = 2)
+
+gbmGrid <-  expand.grid(interaction.depth = seq(7,12,1), 
+                        n.trees = (1:30)*50, 
+                        shrinkage = 0.1,
+                        n.minobsinnode = 20)
+  
+depth_tree <- train(medv ~ ., data = housingvalue_train, 
+                 method = "gbm", 
+                 trControl = fitControl, 
+                 verbose = FALSE, 
+                 ## Now specify the exact models 
+                 ## to evaluate:
+                 tuneGrid = gbmGrid)
+depth_tree
+```
+```{r}
+trellis.par.set(caretTheme())
+plot(depth_tree)  
+```
+
+## find reasonable parameters-- shringkage and n.miobsinnode
+```{r}
+fitControl <- trainControl(## 10-fold CV
+                           method = "repeatedcv",
+                           number = 10,
+                           ## repeated ten times
+                           repeats = 2)
+
+gbmGrid <-  expand.grid(interaction.depth =8 , 
+                        n.trees = 400, 
+                        shrinkage = c(0.5, 0.1, 0.01, 0.001),
+                        n.minobsinnode = seq(0,40, 10))
+  
+shringkage_n.miobs <- train(medv ~ ., data = housingvalue_train, 
+                 method = "gbm", 
+                 trControl = fitControl, 
+                 verbose = FALSE, 
+                 ## Now specify the exact models 
+                 ## to evaluate:
+                 tuneGrid = gbmGrid)
+shringkage_n.miobs
+```
+
+```{r}
+trellis.par.set(caretTheme())
+plot(shringkage_n.miobs)  
+```
+## prediction by gbm method
+###The Best values used for the gbm model were n.trees = 400, interaction.depth =8, shrinkage = 0.1 and n.minobsinnode = 20.
+```{r}
+boost.fit <- gbm(medv~.,data=housingvalue_train, n.trees=400, interaction.depth=8,shrinkage=0.01, n.minobsinnode = 0)
+boost.pred <- predict(boost.fit,housingvalue_test, n.trees=400)
+mean((boost.pred-housingvalue_test$medv)^2) 
+postResample(boost.pred, housingvalue_test$medv)
+```
+
+```{r}
+# Best gbm method
+postResample(boost.pred, housingvalue_test$medv)
+# Best Keras method
+postResample(keras_prediction, housingvalue_test$medv)
+```
+
+### By comparing RMSE, R-square and MAE, we could obatin that gbm have an obviously better performance compared with Keras method. 
+
