@@ -1,5 +1,5 @@
 ---
-title: "analyst institute task"
+title: "Political Analyst: EDA and Regression analysis"
 author: "YANG YUAN"
 date: "4/23/2018"
 output:
@@ -189,7 +189,3 @@ result2 <- binned_transform(df$age, vector_breaks = c(30, 55), label_input =c("Y
 head(df$age, 10)
 head(result2, 10)
 ```
-
-https://gist.github.com/YY0919/5fc4e365b5d80360833db96951042c20
-
-
