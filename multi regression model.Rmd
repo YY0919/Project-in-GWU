@@ -1,0 +1,375 @@
+###Normality test
+```{r}
+HR<-read.csv("/Users/yang/Desktop/6215/project/Copy of HR Employee Attrition.csv", header = TRUE)
+HR<-HR[c(1:4,8:10,12:14,16,17,19:20,21,22)]
+colnames(HR)<-c('age','attri','business','dailyrate','Environ','gender','hour','joblevel','jobsatis','income','overtime','incrate','relasatisf','option','totyear','years')
+```
+```{r}
+# chisquare of overall
+x <- as.matrix(HR[c(1,4,7,10,12,15,16)]) # n x p numeric matrix
+center <- colMeans(x) # centroid
+n <- nrow(x); p <- ncol(x); cov <- cov(x); 
+d <- mahalanobis(x,center,cov) # distances 
+qqplot(qchisq(ppoints(n),df=p),d,
+       main="QQ Plot Assessing Multivariate Normality")
+abline(a=0,b=1)
+```
+```{r}
+attrition<-subset(HR,attri>0)
+noattrition<-subset(HR,attri<1)
+
+```
+```{r}
+par(mfrow=c(1,2))
+# chisquare of attrition group
+x <- as.matrix(attrition[c(1,4,6,7,10,12,15)]) # n x p numeric matrix
+center <- colMeans(x) # centroid
+n <- nrow(x); p <- ncol(x); cov <- cov(x); 
+d <- mahalanobis(x,center,cov) # distances 
+qqplot(qchisq(ppoints(n),df=p),d,
+       main="QQ Plot Assessing Multivariate Normality")
+abline(a=0,b=1)
+# chisquare of attrition group
+x <- as.matrix(noattrition[c(1,4,7,10,12,15)]) # n x p numeric matrix
+center <- colMeans(x) # centroid
+n <- nrow(x); p <- ncol(x); cov <- cov(x); 
+d <- mahalanobis(x,center,cov) # distances 
+qqplot(qchisq(ppoints(n),df=p),d,
+       main="QQ Plot Assessing Multivariate Normality")
+abline(a=0,b=1)
+
+```
+
+```{r}
+library(MASS)
+class<-HR[c(1,4,7,10,12,15,16)]
+#qqplot
+par(mfrow=c(2,4))
+a<-class$age
+qqnorm(a)
+qqline(a)
+b<-class$dailyrate
+qqnorm(b)
+qqline(b)
+c<-class$hour
+qqnorm(c)
+qqline(c)
+d<-class$income
+qqnorm(d)
+qqline(d)
+e<-class$incrate
+qqnorm(e)
+qqline(e)
+f<-class$totyear
+qqnorm(f)
+qqline(f)
+g<-(class$years)
+qqnorm(g)
+qqline(g)
+```
+
+```{r}
+#qqplot transformation
+par(mfrow=c(2,4))
+d<-class$income
+qqnorm(d)
+qqline(d)
+d<-log(class$income)
+qqnorm(d, col='blue')
+qqline(d)
+
+e<-class$incrate
+qqnorm(e)
+qqline(e)
+e<-class$incrate
+qqnorm(e,col='blue')
+qqline(e)
+
+f<-class$totyear
+qqnorm(f)
+qqline(f)
+f<-class$totyear^(1/3)
+qqnorm(f, col='blue')
+qqline(f)
+
+g<-(class$years)
+qqnorm(g)
+qqline(g)
+g<-(class$years)^(1/3)
+qqnorm(g, col='blue')
+qqline(g)
+```
+
+```{r}
+library(MASS)
+tran_class<-data.frame(cbind(a,b,c,d,e,f,g,HR$attri,HR$gender,HR$overtime))
+colnames(tran_class)<-c('age','dailyrate','hour','income','incrate','totyear','years','attri','gender','overtime')
+# chisquare of attrition group
+x <- as.matrix(tran_class) # n x p numeric matrix
+center <- colMeans(x) # centroid
+n <- nrow(x); p <- ncol(x); cov <- cov(x); 
+d <- mahalanobis(x,center,cov) # distances 
+qqplot(qchisq(ppoints(n),df=p),d,
+       main="QQ Plot Assessing Multivariate Normality")
+abline(a=0,b=1)
+```
+
+```{r}
+attrition<-subset(tran_class,attri>0)
+noattrition<-subset(tran_class,attri<1)
+par(mfrow=c(1,2))
+# chisquare of attrition group
+x <- as.matrix(attrition[1:7]) # n x p numeric matrix
+center <- colMeans(x) # centroid
+n <- nrow(x); p <- ncol(x); cov <- cov(x); 
+d <- mahalanobis(x,center,cov) # distances 
+qqplot(qchisq(ppoints(n),df=p),d,
+       main="QQ Plot Assessing Multivariate Normality")
+abline(a=0,b=1)
+# chisquare of attrition group
+x <- as.matrix(noattrition[1:7]) # n x p numeric matrix
+center <- colMeans(x) # centroid
+n <- nrow(x); p <- ncol(x); cov <- cov(x); 
+d <- mahalanobis(x,center,cov) # distances 
+qqplot(qchisq(ppoints(n),df=p),d,
+       main="QQ Plot Assessing Multivariate Normality")
+abline(a=0,b=1)
+```
+hoteling T2
+---
+title: "Hotelling"
+author: "YY"
+date: "4/23/2017"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+```{r}
+HR<-read.csv("/Users/yang/Desktop/6215/project/Copy of HR Employee Attrition.csv", header = TRUE)
+HR<-HR[c(1:4,8:10,12:14,16,17,19:20,21,22)]
+colnames(HR)<-c('age','attri','business','dailyrate','Environ','gender','hour','joblevel','jobsatis','income','overtime','incrate','relasatisf','option','totyear','years')
+```
+```{r}
+#hotelling T2
+#attrition
+hotelling<-HR[c(1,2,4,7,10,12,15,16)]
+attrition<-subset(HR[c(1,2,4,7,10,12,15,16)], attri>0)
+attrition<-attrition[c(1,3:8)]
+nonattrition<-subset(HR[c(1,2,4,7,10,12,15,16)], attri<1)
+nonattrition<-nonattrition[c(1,3:8)]
+xbar0<-colMeans(nonattrition)
+xbar1<-colMeans(attrition)
+s1<-cov(attrition)
+s0<-cov(nonattrition)
+n1<-nrow(attrition)
+n0<-nrow(nonattrition)
+p<-6
+Spool = ((n1-1)*s1 + (n0-1)*s0)/(n1+n0-2)
+d = xbar0-xbar1
+T2 = t(d) %*% solve(Spool*(1/n1+1/n0))%*%d
+T2
+crit = (n1+n0-2)*p/(n1+n0-p-1)*qf(0.85,p, n1+n0-p-1)
+crit
+```
+```{r}
+#simultanious interval
+crit = (n1+n0-2)*p/(n1+n0-p-1)*qf(0.95,p, n1+n0-p-1)
+se = sqrt(diag(Spool)*(1/n1+1/n0))
+SCI = cbind(d - sqrt(crit)*se, d+ sqrt(crit)*se)
+colnames(SCI)=c("LB","UB")
+SCI
+```
+```{r}
+#bonferroni
+crit = qt(1-0.05/(2*p),n1+n0-p-2)
+se = sqrt(diag(Spool)*(1/n1+1/n0))
+BCI = cbind(d - crit*se,d + crit*se)
+colnames(BCI)=c("LB","UB")
+BCI
+```
+
+```{r}
+#gender
+hotelling<-HR[c(1,4,6,7,10,12,15)]
+female<-subset(HR[c(1,4,6,7,10,12,15)], gender>0)
+female<-female[c(1,2,4:7)]
+male<-subset(HR[c(1,4,6,7,10,12,15)], gender<1)
+male<-male[c(1,2,4:7)]
+xbar0<-colMeans(male)
+xbar1<-colMeans(female)
+s1<-cov(female)
+s0<-cov(male)
+n1<-nrow(female)
+n0<-nrow(male)
+p<-6
+Spool = ((n1-1)*s1 + (n0-1)*s0)/(n1+n0-2)
+d = xbar0-xbar1
+T2 = t(d) %*% solve(Spool*(1/n1+1/n0))%*%d
+T2
+crit = (n1+n0-2)*p/(n1+n0-p-1)*qf(0.85,p, n1+n0-p-1)
+crit
+```
+PCA
+---
+title: "Untitled"
+author: "YY"
+date: "4/30/2017"
+output: pdf_document
+---
+
+```{r}
+HR<-read.csv("/Users/yang/Desktop/6215/project/Copy of HR Employee Attrition.csv", header = TRUE)
+HR<-HR[c(1:4,8:10,12:14,16,17,19:20,21,22)]
+funct<-HR[c(1,4,7,10,12,15,16)]
+# covariance matrix and egienvalue$vector and percent
+cov(funct)
+var<-round(eigen(cov(funct))$value,3)
+percent<-var/sum(var)
+#vector
+round(eigen(cov(funct))$vector,3)
+#value
+var
+#percent
+percent
+```
+```{r}
+# correlation matrix and egienvalue$vector and percent
+cor(funct)
+g<-round(eigen(cor(funct))$value,3)
+percent<-g/sum(g)
+#eigenvalue
+g
+#vector
+round(eigen(cor(funct))$vector,3)
+#percent
+percent
+```
+
+```{r}
+c<-c(1:ncol(funct))
+plot(c,var, main='cov eigenvalue', type='b',col='blue')
+plot(c,g,main='cor eigenvalue', type='b',col="blue")
+
+LDA AND QDA
+library(MASS)
+tran_class<-data.frame(cbind(a,b,c,d,e,f,g,HR$attri,HR$gender,HR$overtime))
+colnames(tran_class)<-c('age','dailyrate','hour','income','incrate','totyear','years','attri','gender','overtime')
+
+```
+
+train<-sample(1:1470,1323)
+```{r}
+train<-sample(1:1470,1323)
+#lda attri
+lda.fit<-lda(attri~.,data = tran_class[train,])
+lda.fit
+lda.class<-predict(lda.fit)$class
+table(tran_class$attri[train],lda.class)
+lda.fit<-lda(attri~.,data = tran_class, subset = train)
+lda.class<-predict(lda.fit, tran_class[-train,])$class
+table(tran_class$attri[-train],lda.class)
+```
+
+
+
+```{r}
+#lda confidence interval
+lda<-read.csv("/Users/yang/Desktop/6215/project/lda.csv", header = TRUE)
+APER<-(lda$train_mis_attri+lda$train_mis_nonattri)/(lda$train_mis_attri+lda$train_mis_nonattri+lda$train_attri+lda$train_nonattri)
+newAPER<-(lda$test_mis_attri+lda$test_mis_nonattri)/(lda$test_attri+lda$test_nonattri+lda$test_mis_attri+lda$test_mis_nonattri)
+s<-var(APER)
+n<-10
+e<-1.96*sqrt(s/n)
+mean(APER)+c(-e,e)
+e2<-1.96*sqrt(var(newAPER/n))
+mean(newAPER)+c(-e2,e2)
+```
+```{r}
+#qda confidence interval
+qda<-read.csv("/Users/yang/Desktop/6215/project/qda.csv", header = TRUE)
+APER<-(qda$train_mis_attri+qda$train_mis_nonattri)/(qda$train_mis_attri+qda$train_mis_nonattri+qda$train_attri+qda$train_nonattri)
+newAPER<-(qda$test_mis_attri+qda$test_mis_nonattri)/(qda$test_attri+qda$test_nonattri+qda$test_mis_attri+qda$test_mis_nonattri)
+s<-var(APER)
+n<-10
+e<-1.96*sqrt(s/n)
+mean(APER)+c(-e,e)
+e2<-1.96*sqrt(var(newAPER/n))
+mean(newAPER)+c(-e2,e2)
+```
+```{r}
+library(reshape)
+lda.post <- predict(lda.fit)$posterior
+library(ggplot2)
+ggplot(melt(lda.post), aes(x=value,y=X1, color=tran_class$attri))+geom_point()
+```
+
+```{r}
+plot(lda.fit, g=tran_class$attri)
+```
+  
+```{r}
+
+#code for my discriminant analysis
+lda.fit<-lda(attri~.,data = tran_class[train,])
+
+lda.values <- predict(lda.fit, tran_class)
+class <- predict(lda.fit)$class
+
+#create a histogram of the discriminant function values
+ldahist(data = lda.values$x[,1],g=tran_class$attri,col = )
+
+#create a scatterplot of the discriminant function values
+lda.fit<-lda(attri~.,data = tran_class, subset = train)
+lda.values<-predict(lda.fit, tran_class[-train,])
+class<-predict(lda.fit, tran_class[-train,])$class
+plot(lda.values$x[,1], type="n", xlim=c(0,147), ylab=c("LDA Axis 1"))
+text(lda.values$x[,1], row.names(tran_class[-train,]),  col=c(as.numeric(class)+10))
+abline(v=0, lty="dotted")
+abline(h=0, lty="dotted")
+
+
+```
+
+```{r}
+par(mfrow=c(1,2))
+lda.fit<-lda(attri~.,data = tran_class, subset = train)
+lda.values<-predict(lda.fit, tran_class[-train,])
+class<-predict(lda.fit, tran_class[-train,])$class
+plot(lda.values$x[,1], type="n", xlim=c(0,147), ylab=c("LDA Axis 1"))
+text(lda.values$x[,1], row.names(tran_class[-train,]),  col=c(as.numeric(class)+10))
+abline(v=0, lty="dotted")
+abline(h=0, lty="dotted")
+plot(pca$x[,1], type="n", xlim=c(0,147), ylab=c("PCA Axis 1"))
+text(pca$x[,1], row.names(tran_class[-train,]),  col=c(as.numeric(class)+10))
+
+```
+```{r}
+lda.fit<-lda(~.,tran_class)
+plda<-predict(object = lda.fit, newdata=tran_class)
+tran_class<-data.frame(attri=tran_class[,"attri"], lda=plda$x)
+ggplot(tran_class) + geom_point(aes(lda.fit.LD1,, colour = attri, shape = attri), size = 2.5)  
+
+```
+
+```{r}
+lda <- lda(attri~., tran_class)
+plda <- predict(object = lda,newdata = tran_class)
+dataset = data.frame(business = tran_class[,"attri"], lda = plda$x)
+
+ggplot(dataset) + geom_point(aes(c(), lda.LD1, colour = business, shape = business), size = 2.5)
+```
+```{r}
+prop.lda = lda.fit$svd^2/sum(lda.fit$svd^2)
+pca <- prcomp(tran_class[c(-8)],center = TRUE,scale. = TRUE) 
+prop.pca = pca$sdev^2/sum(pca$sdev^2)
+prop.lda
+sum(prop.pca[1:5])
+```
+
+
