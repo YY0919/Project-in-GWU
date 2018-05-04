@@ -1,0 +1,195 @@
+---
+title: "analyst institute task"
+author: "YANG YUAN"
+date: "4/23/2018"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+```{r}
+library(tidyverse)
+```
+
+```{r}
+# Jane Smith 2017 SMS analysis
+rm(list = ls())
+
+# Setup --------
+# Read in data
+wd <- "/Users/yang/Desktop/Job/task/analyst institute task/data"
+rand_data <- read.csv(file.path(wd, "randomization.csv"))
+sms_data <- read.csv(file.path(wd, "text_message_data.csv"))
+survey_data <- read.csv(file.path(wd, "survey_data.csv"))
+turnout_data <- read.csv(file.path(wd, "turnout_data.csv"))
+```
+
+```{r}
+head(rand_data)
+head(sms_data)
+head(survey_data)
+head(turnout_data)
+```
+
+```{r}
+# Combine turnout data
+df <- merge(rand_data, turnout_data, by = "ai_id")
+
+# Add survey data
+df <- merge(df, survey_data, by = "phone_number")
+head(df)
+```
+
+```{r}
+# Reshape SMS data --------
+## I know I need to reshape the data, but I don't know how. Can you do it?
+# The messages field is kind of messy unfortunately
+table(sms_data$message_text)
+
+message_data <- sms_data %>% mutate(first_message = ifelse(message_text == "Hey this is Daniel from VoteReminder, wanted to remind you to vote this Tuesday! How do you plan to get to your polling location?",1, 0), second_message = ifelse(message_text == "Since the year 2000, nearly every year has broken the record for hottest year ever recorded. Jane Smith understands that climate change is real, and the time to act is now. Vote for Jane Smith this Tuesday, to send her to fight to protect our environment.", 1,0))
+treatment_texts_dataset <- message_data %>% group_by(phone_number) %>% mutate(message1 = sum(first_message), message2 = sum(second_message)) %>% select(phone_number,message1,message2)
+replies_dataset <- sms_data %>% filter(message_direction == 'inbound') %>% group_by(phone_number) %>% count()
+opt_out_dataset <- sms_data  %>%mutate(opt_out = ifelse(message_text == 'unsubscribe'|message_text == 'stop'|message_text == 'cancel',1, 0))%>% select(phone_number,opt_out)
+reshaped_data <- left_join(left_join(treatment_texts_dataset,replies_dataset, by = "phone_number"), opt_out_dataset, by = "phone_number") %>% ungroup()
+reshaped_data[is.na(reshaped_data)] <- 0
+head(reshaped_data)
+```
+```{r}
+
+## We need to look at:
+### Whether everyone got both treatment texts
+reshaped_data %>% filter(message1 == 0|message2 == 0)
+```
+Answer: Every observations got both treatment texts in dataset
+
+```{r}
+#Yes, every one get both treatment text 
+### How many replies people sent on average
+reshaped_data %>% summarise(mean(n))
+```
+Answer: On average, people replied 0.6 message after recived treatment texts.
+```{r}
+### How many people tried to opt-out of getting messages
+reshaped_data %>% summarise(mean(opt_out==1))
+```
+Answer: 8.04 percentage of people tried to opt-out of getting messages.
+
+
+```{r}
+# Clean data --------
+
+# Clean up marital status variable
+df$marital_status_bin <- NA
+df$marital_status_bin[df$marital_status == "unmarried" | 
+                        df$marital_status == "separaled"] <- "Unmarried"
+df$marital_status_bin[df$marital_status == "married"] <- "Married"
+
+# Bin age variable
+df$age_bin[df$age < 30] <- "Young"
+df$age_bin[df$age > 30 & df$age < 55] <- "Old-ish"
+df$age_bin[df$age > 55] <- "Old"
+```
+```{r}
+# Balance --------
+## Check for balance across assignment
+## We need to double-check treatment assignment balance by age, race, and marital status
+## I didn't have time to write this part. Could you take care of it?
+
+# pie-chart: Proportion of age in Control and treatment group
+df %>% group_by(sms_treat,age_bin) %>% count() %>% group_by(sms_treat) %>%  mutate(proportion = n  / sum(n))%>% ggplot(aes(x = "", y = proportion, fill = age_bin)) + geom_bar(width = 0.5, stat = "identity") + coord_polar("y", start = 0) + facet_grid(facets = . ~ sms_treat) + ggtitle("Proportion of age in Control and Treatment group") + ylab("sms_treat")
+
+# pie-chart: Proportion of race in Control and treatment group
+df %>% group_by(sms_treat,race) %>% count() %>% group_by(sms_treat) %>%  mutate(proportion = n  / sum(n)) %>% ggplot(aes(x = "", y = proportion, fill = race)) + geom_bar(width = 0.5, stat = "identity") + coord_polar("y", start = 0) + facet_grid(facets = . ~ sms_treat) + ggtitle("Proportion of race in Control and Treatment group") + ylab("sms_treat")
+
+# pie-chart: Proportion of marital_status in Control and treatment group
+df %>% group_by(sms_treat,marital_status_bin) %>% count() %>% group_by(sms_treat) %>%  mutate(proportion = n  / sum(n))%>% ggplot(aes(x = "", y = proportion, fill = marital_status_bin)) + geom_bar(width = 0.5, stat = "identity") + coord_polar("y", start = 0) + facet_grid(facets = . ~ sms_treat) + ggtitle("Proportion of marital_status in Control and Treatment group") + ylab("sms_treat")
+
+```
+Answer: By comparing the pie-chart, we obtain that the proportion of age, race and marital status are almost same in treatment and control groups. We could conclude that the treatment assignment is balanced.
+
+```{r}
+# Results --------
+# Estimate Turnout
+## Control for race, marital status, age (binned), and gender
+turnout_model <- glm(turnout2017 ~ sms_treat + race + marital_status_bin + age_bin+gender, 
+                     data = df, family = "binomial")
+summary(turnout_model)
+```
+```{r}
+# Estimate Persuasion
+## Control for race, marital status, age (binned), gender, and 
+## whether they turned out to vote in 2017
+persuasion_model <- glm(support_smith ~ sms_treat + race + marital_status_bin + 
+                          age_bin + turnout2017+gender,
+                        data = df, family = "binomial")
+summary(persuasion_model)
+```
+```{r}
+# Estimate Thermometer
+## Control for race, marital status, age (binned), gender, and 
+## whether they turned out to vote in 2017
+df$environment_thermometer<-as.factor(df$environment_thermometer)
+env_model <- glm(environment_thermometer ~ sms_treat + race + marital_status_bin + 
+                   age_bin + gender + turnout2017,
+                 data = df, family = "binomial")
+summary(env_model)
+```
+```{r}
+# Graphs --------
+## I didn't have time to put together graphs for the presentation.
+## Could you put together graphs for the turnout and thermometer results?
+# bar-chart: turnout rate VS sms_treat
+df %>% group_by(sms_treat) %>% summarise(turnout_rate=round(mean(turnout2017==1),3)) %>% ggplot(aes(x=sms_treat, y=turnout_rate,fill=sms_treat)) + geom_bar(width = 0.4,stat = 'identity') + ggtitle("turnout rate VS sms_treat") + geom_text(aes(label = turnout_rate), vjust=1.6, color="black", size=3.5)
+
+#bar-chart: average environment thermometer VS sms_treat
+df$environment_thermometer<-as.numeric(df$environment_thermometer)
+df %>% group_by(sms_treat) %>% summarise(average_environment_thermometer = round(mean(environment_thermometer, na.rm = TRUE),3)) %>% ggplot(aes(x=sms_treat, y=average_environment_thermometer,fill=sms_treat)) + geom_bar(width = 0.4, stat = 'identity') + ggtitle("average environment thermometer VS sms_treat") + geom_text(aes(label = average_environment_thermometer), vjust=1.6, color="white", size=3.5)
+
+#box-plot: environment_thermometer VS sms_treat
+df %>% group_by(sms_treat) %>% ggplot(aes(x=sms_treat, y= environment_thermometer,fill=sms_treat)) + geom_boxplot(na.rm = TRUE, colour="#3366FF") + ggtitle("environment_thermometer VS sms_treat") 
+
+```
+
+1.	Did the message program increase voters’ likelihood to vote?
+From turnout_model, the p-value of sms_treatment is 0.0584. Since coefficient of sms_treatment is 0.1 in logistic model, we obtain that the sms_treatment have positively significant effect on turnout under 10% significant level. Hence, the message program increase voters' likelihood to vote.
+
+2.	Did the message program persuade voters to support Jane Smith?
+From persuation group, the coefficient of sms_treatment is small and p-value of sms_treatment is high. Message program do not persuade voters to support Smith.
+
+3.	Did the message program increase how much voters care about protecting the environment on a scale from 1-10?
+From the box-plot: environment_thermometer VS sms_treat, the medium of environment_thermometer is higher in treatment group. However, env_model shows sms_treat does not have significantly effect on environment_thermometer. The average of environment_thermometers are almost same in two groups. Hence, the message program can't increase environment_thermometer.
+https://gist.github.com/YY0919/ac6f2f883832dc5c8721ceeb80f92e69
+
+#part two
+##general function
+
+```{r}
+# This function could transform continuous variable to categorical variable by either a number of breaks or a vector of specific breaks. When using a vector of specific breaks, function should set parameter-specific_breaks as TRUE.
+binned_transform <- function(variable, n_breaks, vector_breaks, label_input=FALSE, specific_break=FALSE){
+  x <-  variable
+  if (specific_break==FALSE){
+    interval_x=(max(x)-min(x))  / (n_breaks + 1)
+    x=cut(x, breaks = seq(min(x), max(x), interval_x), labels=label_input)
+  }else {
+      x=cut(x, breaks = c(min(x), vector_breaks, max(x)) , labels = label_input)
+    }
+  return(x)
+}
+```
+##The following chunks show two example of binned_transform function.
+```{r}
+# transform by number of breaks
+result1 <- binned_transform(df$age, n_breaks = 2, label_input =c("Young", "Old-ish", "Old"))
+head(df$age, 10)
+head(result1, 10)
+```
+```{r}
+#transform by specific breaks
+result2 <- binned_transform(df$age, vector_breaks = c(30, 55), label_input =c("Young", "Old-ish", "Old"), specific_break = TRUE)
+head(df$age, 10)
+head(result2, 10)
+```
+
+https://gist.github.com/YY0919/5fc4e365b5d80360833db96951042c20
+
+
