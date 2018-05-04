@@ -1,0 +1,265 @@
+---
+title: "time series"
+author: "YY"
+date: "11/3/2017"
+output: pdf_document
+---
+
+
+```{r}
+#import original dataset
+data<-read.csv('/Users/yang/Desktop/graduate/consulting/PM2.5project/for week.csv')
+train_data<-data[274:1734,]
+test_data<-data[1:273,]
+```
+
+
+```{r}
+library(plyr)
+monthly_mean<- ddply(data, .(year, month), summarise, mean_temp = mean(PM25))
+weekly_mean<-ddply(data, .(year,week), summarise, mean_temp = mean(PM25))
+original_weekly<-ts(weekly_mean['mean_temp'], start = c(2013,1,1), frequency = 52)
+original_monthly<-ts(monthly_mean['mean_temp'], start = c(2013,1,1), frequency = 12)
+```
+
+```{r}
+#build monthly training and testing dataset
+monthly_mean_train = ddply(train_data, .(year, month), summarise, mean_temp = mean(PM25))
+monthly_mean_test = ddply(test_data, .(year, month), summarise, mean_temp = mean(PM25))
+monthly_train = ts(monthly_mean_train['mean_temp'],start = c(2013, 1),frequency = 12)
+monthly_test=ts(monthly_mean_train['mean_temp'],start = c(2013, 1),frequency = 12)
+```
+```{r}
+#build weekly training and testing dataset
+weekly_mean_train = ddply(train_data, .(year,week), summarise, mean_temp = mean(PM25))
+weekly_mean_test = ddply(test_data, .(year,week), summarise, mean_temp = mean(PM25))
+weekly_train<-ts(weekly_mean_train['mean_temp'], start = c(2013,1,1), frequency = 52)
+weekly_test<-ts(weekly_mean_test['mean_temp'], start = c(2013,1,1), frequency = 52)
+```
+
+
+
+
+#weekly
+```{r}
+library(astsa)
+#plot ACF and PACF to identify potential AR and MA model of weekly data
+
+```
+```{r}
+require(forecast)
+weekARIMAfit = auto.arima(weekly_train, approximation=FALSE,trace=FALSE)
+summary(weekARIMAfit)
+```
+```{r}
+#model analysis
+library(astsa)
+weekly_model1<-sarima.for(weekly_train, 40, 0,1,1,0,1,0,52)
+weekly_model2<-sarima.for(weekly_train, 40, 1,1,1,0,1,1,52)
+weekly_model5<-sarima.for(weekly_train, 40, 0,1,1,1,1,1,52)
+weekly_model6<-sarima.for(weekly_train, 40, 0,1,1,0,1,1,52)
+```
+```{r}
+sarima(weekly_train,0,1,1,0,1,1,52)
+```
+
+
+```{r}
+weekly_decomp <- decompose(weekly_train, type="additive") # use type = "additive" for additive components
+plot (weekly_decomp) # see plot below
+weekly_trend=weekly_decomp$trend
+weekly_seasonal=weekly_decomp$seasonal
+weekly_random=weekly_decomp$random
+```
+```{r}
+ARIMAfit = auto.arima(ts(weekly_trend[27:184]), approximation=FALSE,trace=FALSE)
+summary(ARIMAfit)
+acf(ARIMAfit$residuals)
+```
+
+```{r}
+#trend prediction plus seasonal effect for 2017
+model3<-sarima.for(weekly_trend[27:184],66,1,1,1,0,0,0,52)
+weekly_trend_pred=as.numeric(model3$pred)
+weekly_trend_sea=weekly_trend_pred[27:66]+head(as.numeric(weekly_seasonal),40)
+```
+```{r}
+#trend+random prediction plus seasonal effect for 2017
+model4<-sarima.for(weekly_trend[27:184]+weekly_random[27:184],66,1,1,1,0,0,0,52)
+weekly_trendrandom_pred=as.numeric(model4$pred)
+weekly_trendrandom_sea=weekly_trendrandom_pred[27:66]+head(as.numeric(weekly_seasonal),40)
+```
+```{r}
+#test the accuracy of model by sum of square error
+truevalue<-weekly_mean_test['mean_temp']
+#accuracy for model1 
+week_model1_pred=as.numeric(weekly_model1$pred)
+error1<-sum((truevalue-week_model1_pred)^2)/40
+error1
+#accuracy for model2
+week_model2_pred=as.numeric(weekly_model2$pred)
+error2<-sum((truevalue-week_model2_pred)^2)/40
+error2
+#accuracy for trend plus seasonal model
+error3<-sum((truevalue-weekly_trend_sea)^2)/40
+error3
+#accuracy for trend+random plus seasonal model
+error4<-sum((truevalue-weekly_trendrandom_sea)^2)/40
+error4
+#accuracy for model5
+week_model5_pred=as.numeric(weekly_model5$pred)
+error5<-sum((truevalue-week_model5_pred)^2)/40
+error5
+#accuracy for model6
+week_model6_pred=as.numeric(weekly_model6$pred)
+error6<-sum((truevalue-week_model6_pred)^2)/40
+error6
+```
+```{r}
+#prediction for next year base on original dataset
+past_weekly_decomp<-decompose(weekly)
+past_weekly_trend=past_weekly_decomp$trend
+past_weekly_seasonal=past_weekly_decomp$seasonal
+pred_weekly_trend<-sarima.for(past_weekly_trend[27:224],78,1,1,1,0,0,0,52)
+pred_weekly_trend=as.numeric(pred_weekly_trend$pred)
+#prediction for next one year
+prediction_weekly=pred_weekly_trend[1:78]+as.numeric(weekly_seasonal)[27:104]
+# plot prediction
+finalprediction=append(weekly_mean['mean_temp'][1:225,],prediction_weekly)
+weekly<-ts(finalprediction, start = c(2013,1,1), frequency = 52)
+plot(weekly, xlab='weekly', ylab = 'Average PM2.5')
+```
+```{r}
+month_model1<-sarima.for(original_weekly,52,0,1,1,0,1,1,52)
+mean(month_model1$pred)
+```
+
+
+
+
+#monthly
+```{r}
+library(astsa)
+#plot ACF and PACF to identify potential AR and MA model of monthly data
+acf2(monthly, max.lag = 24)
+acf2(diff(monthly),max.lag = 24)
+acf2(diff(monthly,12),max.lag = 24)
+```
+
+```{r}
+#identification of best fit ARIMA model
+require(forecast)
+monthARIMAfit = auto.arima(monthly_train, approximation=FALSE,trace=FALSE)
+summary(monthARIMAfit)
+```
+```{r}
+sarima(monthly_train,0,1,2,1,1,0,12)
+sarima(monthly_train,0,1,1,1,1,0,12)
+sarima(monthly_train,0,1,2,1,1,1,12)
+```
+
+```{r}
+library(ggplot2)
+#monthly predict result 
+month_model1<-sarima.for(monthly_train,9,0,1,2,1,1,0,12)
+month_model2<-sarima.for(monthly_train,9,0,1,1,1,1,0,12)
+month_model5<-sarima.for(monthly_train,9,0,1,2,1,1,0,12)
+month_model6<-sarima.for(monthly_train,9,0,1,2,1,1,1,12)
+```
+```{r}
+
+```
+
+
+```{r}
+#monthly decompose analysis
+monthly_decomp <- decompose(monthly, type="additive") # use type = "additive" for additive components
+plot (monthly_decomp) # see plot below
+monthly_trend=monthly_decomp$trend
+monthly_seasonal=monthly_decomp$seasonal
+monthly_random<-monthly_decomp$random
+```
+
+```{r}
+#trend prediction plus seasonal effect for 2017
+model3<-sarima.for(monthly_trend[7:42],18,1,1,1,0,0,0,12)
+monthly_trend_pred=as.numeric(model3$pred)
+monthly_trend_sea=monthly_trend_pred[7:18]+head(as.numeric(monthly_seasonal),12)
+```
+```{r}
+#trend+random error prediction plus seasonal effect for 2017
+model4<-sarima.for(monthly_trend[7:42]+monthly_random[7:42],18,1,1,1,0,0,0,12)
+monthly_trendrandom_pred=as.numeric(model4$pred)
+monthly_trendrandom_sea=monthly_trendrandom_pred[7:18]+head(as.numeric(monthly_seasonal),12)
+```
+
+```{r}
+#test the accuracy of model by sum of square error
+truevalue<-monthly_mean_test['mean_temp']
+#accuracy for model1
+month_model1$pred=as.numeric(month_model1$pred)
+error1<-sum((truevalue-month_model1$pred)^2)/9
+error1
+#accuracy for model2
+month_model2$pred=as.numeric(month_model2$pred)
+error2<-sum((truevalue-month_model2$pred)^2)/9
+error2
+#accuracy for trend plus seasonal model
+error3<-sum((truevalue-monthly_trend_sea[1:9])^2)/9
+error3
+#accuracy for trend and random plus seasonal model
+error4<-sum((truevalue-monthly_trendrandom_sea[1:9])^2)/9
+error4
+#accuracy for model5
+month_model5$pred=as.numeric(month_model5$pred)
+error5<-sum((truevalue-month_model5$pred)^2)/9
+error5
+#accuracy for model6
+month_model6$pred=as.numeric(month_model6$pred)
+error6<-sum((truevalue-month_model6$pred)^2)/9
+error6
+
+```
+
+```{r}
+month_model1<-sarima.for(original_monthly,12,0,1,2,1,1,0,12)
+mean(month_model1$pred)
+```
+
+```{r}
+#prediction for next year base on original dataset
+past_monthly_decomp<-decompose(monthly)
+past_monthly_trend=past_monthly_decomp$trend
+past_monthly_seasonal=past_monthly_decomp$seasonal
+pred_monthly_trend<-sarima.for(past_monthly_trend[7:51],18,1,1,1,0,0,0,12)
+pred_monthly_trend=as.numeric(pred_monthly_trend$pred)
+#prediction for next one year
+prediction_monthly=pred_monthly_trend[7:18]+head(as.numeric(monthly_seasonal),12)
+# plot prediction
+finalprediction=append(monthly_mean['mean_temp'][1:57,],prediction_monthly)
+monthly<-ts(finalprediction, start = c(2013,1,1), frequency = 12)
+plot(monthly, xlab='monthly', ylab = 'Average PM2.5')
+```
+
+```{r}
+#test the best model for predicting monthly trend
+monthly_random<-monthly_decomp$random
+plot(ts(monthly_trend[7:42]+monthly_random[7:42],start = c(2013,7,1), frequency = 12))
+ARIMAfit = auto.arima(ts(monthly_trend[7:42]), approximation=FALSE,trace=FALSE)
+summary(ARIMAfit)
+```
+
+```{r}
+#test the trend of pm2.5 with seasaonality
+library(trend)
+data<- data[seq(dim(data)[1],1),]
+original_daily<-ts(data['PM25'], start = c(2013,1,1), frequency = 365)
+mk.test(original_daily)
+```
+```{r}
+daily_decomp <- decompose(original_daily, type="additive") # use type = "additive" for additive components
+
+plot (daily_decomp) # see plot below
+mk.test(decompose(original_daily)$trend[183:1552], alternative = "less")
+```
+
